@@ -183,42 +183,76 @@ export default function KitchenPage() {
   }, [updateOrdersState]);
 
   // Atualiza status do pedido
-  const updateOrderStatus = useCallback(
-    async (orderId: string | number, newStatus: string): Promise<void> => {
-      try {
-        const response = await fetch(
-          `${BACKEND_URL}/api/orders/${orderId}/status`,
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ status: newStatus }),
-          },
-        );
+const updateOrderStatus = useCallback(
+  async (orderId: string | number, newStatus: string): Promise<void> => {
+    try {
+      // 🔧 CORREÇÃO: Remove barra final da URL se existir
+      const cleanUrl = BACKEND_URL.replace(/\/$/, '');
+      const url = `${cleanUrl}/api/orders/${orderId}/status`;
+      
+      console.log(`📡 Atualizando pedido ${orderId} para status: ${newStatus}`);
+      console.log(`🔗 URL: ${url}`);
+      
+      const response = await fetch(url, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
 
-        if (response.ok) {
-          const updatedOrder: Order = await response.json();
-          handleOrderUpdate(updatedOrder);
+      if (response.ok) {
+        const updatedOrder: Order = await response.json();
+        console.log(`✅ Pedido ${orderId} atualizado com sucesso!`, updatedOrder);
+        handleOrderUpdate(updatedOrder);
 
-          if (newStatus === "ready") {
+        // 🔧 CORREÇÃO: Tocar som apenas se o arquivo existir
+        if (newStatus === "ready") {
+          try {
             const audioReady = new Audio("/sounds/order-ready.mp3");
-            audioReady
-              .play()
-              .catch((e) => console.error("Erro ao tocar som:", e));
+            audioReady.volume = 0.5;
+            const playPromise = audioReady.play();
+            
+            if (playPromise !== undefined) {
+              playPromise.catch((e) => {
+                console.warn("⚠️ Som não pôde ser reproduzido:", e.message);
+                // Fallback: beep via Web Audio API
+                try {
+                  const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+                  if (AudioContext) {
+                    const ctx = new AudioContext();
+                    const oscillator = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    oscillator.connect(gain);
+                    gain.connect(ctx.destination);
+                    oscillator.frequency.value = 880;
+                    gain.gain.value = 0.3;
+                    oscillator.start();
+                    gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5);
+                    setTimeout(() => ctx.close(), 600);
+                  }
+                } catch (fallbackError) {
+                  console.log("Fallback de som também falhou");
+                }
+              });
+            }
+          } catch (audioError) {
+            console.log("Erro ao preparar áudio:", audioError);
           }
-        } else {
-          const errorData = await response.json();
-          alert(
-            "Erro ao atualizar status: " +
-              (errorData.message || "Falha no servidor"),
-          );
         }
-      } catch (error) {
-        console.error("Erro ao atualizar pedido:", error);
-        alert("Erro de conexão com o servidor.");
+      } else {
+        const errorData = await response.json().catch(() => ({ message: "Erro desconhecido" }));
+        console.error(`❌ Erro ${response.status}:`, errorData);
+        alert(
+          "Erro ao atualizar status: " +
+            (errorData.message || `Falha no servidor (${response.status})`),
+        );
       }
-    },
-    [handleOrderUpdate],
-  );
+    } catch (error) {
+      console.error("❌ Erro ao atualizar pedido:", error);
+      alert(`Erro de conexão com o servidor. Verifique se o backend está rodando em: ${BACKEND_URL}`);
+    }
+  },
+  [handleOrderUpdate, BACKEND_URL],
+);
 
   // Atualiza status de um grupo de pedidos
   const updateGroupStatus = useCallback(
@@ -233,9 +267,66 @@ export default function KitchenPage() {
   );
 
   const playNotificationSound = useCallback((): void => {
-    const audio = new Audio("/sounds/new-order.mp3");
-    audio.play().catch((error) => console.error("Error playing sound:", error));
-  }, []);
+  try {
+    const audio = new Audio();
+    audio.volume = 0.5;
+    
+    // Tenta carregar o arquivo de som
+    audio.src = "/sounds/new-order.mp3";
+    
+    const playPromise = audio.play();
+    
+    if (playPromise !== undefined) {
+      playPromise.catch((error) => {
+        console.warn("⚠️ Arquivo de som não encontrado, usando fallback:", error.message);
+        
+        // 🔧 FALLBACK: Web Audio API (beep)
+        try {
+          const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+          if (AudioContext) {
+            const ctx = new AudioContext();
+            const oscillator = ctx.createOscillator();
+            const gain = ctx.createGain();
+            
+            oscillator.connect(gain);
+            gain.connect(ctx.destination);
+            
+            oscillator.frequency.value = 880; // Nota Lá
+            gain.gain.value = 0.3;
+            
+            oscillator.start();
+            
+            // Encerra o som após 0.3 segundos
+            gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.3);
+            setTimeout(() => {
+              ctx.close().catch(() => {});
+            }, 350);
+            
+            console.log("🔔 Som de notificação reproduzido via Web Audio API");
+          } else {
+            // Último recurso: vibrar se disponível
+            if (navigator.vibrate) {
+              navigator.vibrate(200);
+              console.log("📳 Vibração como fallback");
+            }
+          }
+        } catch (fallbackError) {
+          console.warn("⚠️ Fallback de som também falhou:", fallbackError);
+          // Vibração como último recurso
+          if (navigator.vibrate) {
+            navigator.vibrate(200);
+          }
+        }
+      });
+    }
+  } catch (error) {
+    console.error("❌ Erro ao criar áudio:", error);
+    // Vibração como último recurso
+    if (navigator.vibrate) {
+      navigator.vibrate(200);
+    }
+  }
+}, []);
 
   // Configura WebSocket
   useEffect(() => {
