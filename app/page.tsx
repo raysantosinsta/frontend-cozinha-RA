@@ -55,6 +55,11 @@ export default function KitchenPage() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
 
+  // Adicione esta função no início do componente
+  const getCleanUrl = useCallback(() => {
+    return BACKEND_URL.replace(/\/$/, "");
+  }, []);
+
   // Agrupa pedidos por mesa e timestamp
   const groupOrdersByTableAndTime = useCallback(
     (ordersList: Order[]): GroupedOrder[] => {
@@ -183,162 +188,251 @@ export default function KitchenPage() {
   }, [updateOrdersState]);
 
   // Atualiza status do pedido
-const updateOrderStatus = useCallback(
-  async (orderId: string | number, newStatus: string): Promise<void> => {
-    try {
-      // 🔧 CORREÇÃO: Remove barra final da URL se existir
-      const cleanUrl = BACKEND_URL.replace(/\/$/, '');
-      const url = `${cleanUrl}/api/orders/${orderId}/status`;
-      
-      console.log(`📡 Atualizando pedido ${orderId} para status: ${newStatus}`);
-      console.log(`🔗 URL: ${url}`);
-      
-      const response = await fetch(url, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
-      });
+  const updateOrderStatus = useCallback(
+    async (orderId: string | number, newStatus: string): Promise<void> => {
+      try {
+        // 🔧 CORREÇÃO: Remove barra final da URL se existir
+        const cleanUrl = BACKEND_URL.replace(/\/$/, "");
+        const url = `${cleanUrl}/api/orders/${orderId}/status`;
 
-      if (response.ok) {
-        const updatedOrder: Order = await response.json();
-        console.log(`✅ Pedido ${orderId} atualizado com sucesso!`, updatedOrder);
-        handleOrderUpdate(updatedOrder);
+        console.log(
+          `📡 Atualizando pedido ${orderId} para status: ${newStatus}`,
+        );
+        console.log(`🔗 URL: ${url}`);
 
-        // 🔧 CORREÇÃO: Tocar som apenas se o arquivo existir
-        if (newStatus === "ready") {
-          try {
-            const audioReady = new Audio("/sounds/order-ready.mp3");
-            audioReady.volume = 0.5;
-            const playPromise = audioReady.play();
-            
-            if (playPromise !== undefined) {
-              playPromise.catch((e) => {
-                console.warn("⚠️ Som não pôde ser reproduzido:", e.message);
-                // Fallback: beep via Web Audio API
-                try {
-                  const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-                  if (AudioContext) {
-                    const ctx = new AudioContext();
-                    const oscillator = ctx.createOscillator();
-                    const gain = ctx.createGain();
-                    oscillator.connect(gain);
-                    gain.connect(ctx.destination);
-                    oscillator.frequency.value = 880;
-                    gain.gain.value = 0.3;
-                    oscillator.start();
-                    gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5);
-                    setTimeout(() => ctx.close(), 600);
+        const response = await fetch(url, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: newStatus }),
+        });
+
+        if (response.ok) {
+          const updatedOrder: Order = await response.json();
+          console.log(
+            `✅ Pedido ${orderId} atualizado com sucesso!`,
+            updatedOrder,
+          );
+          handleOrderUpdate(updatedOrder);
+
+          // 🔧 CORREÇÃO: Tocar som apenas se o arquivo existir
+          if (newStatus === "ready") {
+            try {
+              const audioReady = new Audio("/sounds/order-ready.mp3");
+              audioReady.volume = 0.5;
+              const playPromise = audioReady.play();
+
+              if (playPromise !== undefined) {
+                playPromise.catch((e) => {
+                  console.warn("⚠️ Som não pôde ser reproduzido:", e.message);
+                  // Fallback: beep via Web Audio API
+                  try {
+                    const AudioContext =
+                      window.AudioContext || (window as any).webkitAudioContext;
+                    if (AudioContext) {
+                      const ctx = new AudioContext();
+                      const oscillator = ctx.createOscillator();
+                      const gain = ctx.createGain();
+                      oscillator.connect(gain);
+                      gain.connect(ctx.destination);
+                      oscillator.frequency.value = 880;
+                      gain.gain.value = 0.3;
+                      oscillator.start();
+                      gain.gain.exponentialRampToValueAtTime(
+                        0.00001,
+                        ctx.currentTime + 0.5,
+                      );
+                      setTimeout(() => ctx.close(), 600);
+                    }
+                  } catch (fallbackError) {
+                    console.log("Fallback de som também falhou");
                   }
-                } catch (fallbackError) {
-                  console.log("Fallback de som também falhou");
-                }
-              });
+                });
+              }
+            } catch (audioError) {
+              console.log("Erro ao preparar áudio:", audioError);
             }
-          } catch (audioError) {
-            console.log("Erro ao preparar áudio:", audioError);
           }
+        } else {
+          const errorData = await response
+            .json()
+            .catch(() => ({ message: "Erro desconhecido" }));
+          console.error(`❌ Erro ${response.status}:`, errorData);
+          alert(
+            "Erro ao atualizar status: " +
+              (errorData.message || `Falha no servidor (${response.status})`),
+          );
         }
-      } else {
-        const errorData = await response.json().catch(() => ({ message: "Erro desconhecido" }));
-        console.error(`❌ Erro ${response.status}:`, errorData);
+      } catch (error) {
+        console.error("❌ Erro ao atualizar pedido:", error);
         alert(
-          "Erro ao atualizar status: " +
-            (errorData.message || `Falha no servidor (${response.status})`),
+          `Erro de conexão com o servidor. Verifique se o backend está rodando em: ${BACKEND_URL}`,
         );
       }
-    } catch (error) {
-      console.error("❌ Erro ao atualizar pedido:", error);
-      alert(`Erro de conexão com o servidor. Verifique se o backend está rodando em: ${BACKEND_URL}`);
-    }
-  },
-  [handleOrderUpdate, BACKEND_URL],
-);
+    },
+    [handleOrderUpdate, BACKEND_URL],
+  );
 
   // Atualiza status de um grupo de pedidos
   const updateGroupStatus = useCallback(
     async (group: GroupedOrder, newStatus: string): Promise<void> => {
-      // Atualiza cada pedido individual do grupo
-      const promises = group.originalOrders.map((order) =>
-        updateOrderStatus(order.id, newStatus),
-      );
-      await Promise.all(promises);
+      if (!group || !group.originalOrders) {
+        console.error("❌ Grupo inválido ou sem pedidos");
+        return;
+      }
+
+      try {
+        console.log(`📦 Atualizando grupo da mesa ${group.tableNumber}`);
+        console.log(
+          `📋 Itens: ${group.items.map((i) => `${i.quantity}x ${i.productName}`).join(", ")}`,
+        );
+        console.log(`🔄 Status: ${newStatus}`);
+
+        // Timeout para a operação (opcional)
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error("Timeout ao atualizar pedidos")),
+            10000,
+          ),
+        );
+
+        const promises = group.originalOrders.map((order) =>
+          updateOrderStatus(order.id, newStatus),
+        );
+
+        const results = (await Promise.race([
+          Promise.allSettled(promises),
+          timeoutPromise,
+        ])) as PromiseSettledResult<any>[];
+
+        // Verifica se foi timeout
+        if (results === undefined) {
+          console.error(
+            `❌ Timeout ao atualizar pedidos da mesa ${group.tableNumber}`,
+          );
+          return;
+        }
+
+        const failed = results.filter((r) => r.status === "rejected");
+        const succeeded = results.filter((r) => r.status === "fulfilled");
+
+        if (failed.length === 0) {
+          console.log(
+            `✅ ${succeeded.length} pedidos da mesa ${group.tableNumber} atualizados`,
+          );
+        } else {
+          console.warn(
+            `⚠️ ${failed.length} de ${group.originalOrders.length} pedidos falharam`,
+          );
+        }
+      } catch (error) {
+        console.error(
+          `❌ Erro ao atualizar grupo da mesa ${group.tableNumber}:`,
+          error,
+        );
+      }
     },
     [updateOrderStatus],
   );
 
   const playNotificationSound = useCallback((): void => {
-  try {
-    const audio = new Audio();
-    audio.volume = 0.5;
-    
-    // Tenta carregar o arquivo de som
-    audio.src = "/sounds/new-order.mp3";
-    
-    const playPromise = audio.play();
-    
-    if (playPromise !== undefined) {
-      playPromise.catch((error) => {
-        console.warn("⚠️ Arquivo de som não encontrado, usando fallback:", error.message);
-        
-        // 🔧 FALLBACK: Web Audio API (beep)
-        try {
-          const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-          if (AudioContext) {
-            const ctx = new AudioContext();
-            const oscillator = ctx.createOscillator();
-            const gain = ctx.createGain();
-            
-            oscillator.connect(gain);
-            gain.connect(ctx.destination);
-            
-            oscillator.frequency.value = 880; // Nota Lá
-            gain.gain.value = 0.3;
-            
-            oscillator.start();
-            
-            // Encerra o som após 0.3 segundos
-            gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.3);
-            setTimeout(() => {
-              ctx.close().catch(() => {});
-            }, 350);
-            
-            console.log("🔔 Som de notificação reproduzido via Web Audio API");
-          } else {
-            // Último recurso: vibrar se disponível
+    try {
+      const audio = new Audio();
+      audio.volume = 0.5;
+
+      // Tenta carregar o arquivo de som
+      audio.src = "/sounds/new-order.mp3";
+
+      const playPromise = audio.play();
+
+      if (playPromise !== undefined) {
+        playPromise.catch((error) => {
+          console.warn(
+            "⚠️ Arquivo de som não encontrado, usando fallback:",
+            error.message,
+          );
+
+          // 🔧 FALLBACK: Web Audio API (beep)
+          try {
+            const AudioContext =
+              window.AudioContext || (window as any).webkitAudioContext;
+            if (AudioContext) {
+              const ctx = new AudioContext();
+              const oscillator = ctx.createOscillator();
+              const gain = ctx.createGain();
+
+              oscillator.connect(gain);
+              gain.connect(ctx.destination);
+
+              oscillator.frequency.value = 880; // Nota Lá
+              gain.gain.value = 0.3;
+
+              oscillator.start();
+
+              // Encerra o som após 0.3 segundos
+              gain.gain.exponentialRampToValueAtTime(
+                0.00001,
+                ctx.currentTime + 0.3,
+              );
+              setTimeout(() => {
+                ctx.close().catch(() => {});
+              }, 350);
+
+              console.log(
+                "🔔 Som de notificação reproduzido via Web Audio API",
+              );
+            } else {
+              // Último recurso: vibrar se disponível
+              if (navigator.vibrate) {
+                navigator.vibrate(200);
+                console.log("📳 Vibração como fallback");
+              }
+            }
+          } catch (fallbackError) {
+            console.warn("⚠️ Fallback de som também falhou:", fallbackError);
+            // Vibração como último recurso
             if (navigator.vibrate) {
               navigator.vibrate(200);
-              console.log("📳 Vibração como fallback");
             }
           }
-        } catch (fallbackError) {
-          console.warn("⚠️ Fallback de som também falhou:", fallbackError);
-          // Vibração como último recurso
-          if (navigator.vibrate) {
-            navigator.vibrate(200);
-          }
-        }
-      });
+        });
+      }
+    } catch (error) {
+      console.error("❌ Erro ao criar áudio:", error);
+      // Vibração como último recurso
+      if (navigator.vibrate) {
+        navigator.vibrate(200);
+      }
     }
-  } catch (error) {
-    console.error("❌ Erro ao criar áudio:", error);
-    // Vibração como último recurso
-    if (navigator.vibrate) {
-      navigator.vibrate(200);
-    }
-  }
-}, []);
+  }, []);
 
   // Configura WebSocket
   useEffect(() => {
-    console.log("🔌 Conectando WebSocket em:", BACKEND_URL);
+    const cleanUrl = getCleanUrl();
 
-    const newSocket: Socket = io(BACKEND_URL, {
+    if (!cleanUrl) {
+      console.error("❌ URL do backend não definida!");
+      return;
+    }
+
+    console.log("🔌 Conectando WebSocket em:", cleanUrl);
+    console.log("📡 BACKEND_URL original:", BACKEND_URL);
+
+    const newSocket: Socket = io(cleanUrl, {
       query: { type: "kitchen" },
       transports: ["websocket", "polling"],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000,
+      timeout: 10000,
     });
 
     setSocket(newSocket);
     fetchPendingOrders();
+
+    // Evento: conexão bem-sucedida
+    newSocket.on("connect", () => {
+      console.log("✅ WebSocket conectado com sucesso!");
+    });
 
     // Evento: pedido atualizado
     newSocket.on("order-updated", (updatedOrder: Order) => {
@@ -350,7 +444,6 @@ const updateOrderStatus = useCallback(
     newSocket.on("new-order", (order: Order) => {
       console.log("🆕 Novo pedido recebido:", order);
 
-      // Atualiza o estado com o novo pedido
       setOrders((prev) => {
         const allOrders = [
           ...prev.pending.flatMap((g) => g.originalOrders),
@@ -358,10 +451,13 @@ const updateOrderStatus = useCallback(
           ...prev.ready.flatMap((g) => g.originalOrders),
         ];
 
-        // Verifica se o pedido já existe (evita duplicação)
+        // Verifica se o pedido já existe
         const exists = allOrders.some((o) => o.id === order.id);
         if (!exists) {
           allOrders.push(order);
+          console.log(`✅ Novo pedido ${order.id} adicionado`);
+        } else {
+          console.log(`ℹ️ Pedido ${order.id} já existe, ignorando duplicação`);
         }
 
         const groupedOrders = groupOrdersByTableAndTime(allOrders);
@@ -378,8 +474,27 @@ const updateOrderStatus = useCallback(
       }
     });
 
+    // Evento: erro de conexão
+    newSocket.on("connect_error", (error) => {
+      console.error("❌ Erro de conexão WebSocket:", error.message);
+    });
+
+    // Evento: reconexão
+    newSocket.on("reconnect", (attemptNumber) => {
+      console.log(`🔄 WebSocket reconectado após ${attemptNumber} tentativas`);
+    });
+
+    // Evento: desconexão
+    newSocket.on("disconnect", (reason) => {
+      console.log(`❌ WebSocket desconectado. Motivo: ${reason}`);
+    });
+
     return () => {
-      newSocket.close();
+      console.log("🔌 Desconectando WebSocket...");
+      if (newSocket) {
+        newSocket.disconnect();
+        newSocket.close();
+      }
     };
   }, [
     soundEnabled,
@@ -387,6 +502,7 @@ const updateOrderStatus = useCallback(
     handleOrderUpdate,
     groupOrdersByTableAndTime,
     playNotificationSound,
+    getCleanUrl,
   ]);
 
   const totalActiveOrders = useMemo(() => {
