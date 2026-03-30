@@ -8,7 +8,8 @@ import KitchenHeader from "../components/KitchenHeader";
 import NotificationSound from "../components/NotificationSound";
 import "./globals.css";
 
-const BACKEND_URL = "https://backend-nestjs-ra.onrender.com/";
+// 🔧 CORREÇÃO: Remover a barra do final da URL
+const BACKEND_URL = "https://backend-nestjs-ra.onrender.com";
 
 interface OrderItem {
   id: string | number;
@@ -55,7 +56,7 @@ export default function KitchenPage() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
 
-  // Adicione esta função no início do componente
+  // Função para limpar a URL (remove barra final)
   const getCleanUrl = useCallback(() => {
     return BACKEND_URL.replace(/\/$/, "");
   }, []);
@@ -67,7 +68,6 @@ export default function KitchenPage() {
 
       ordersList.forEach((order) => {
         const timestamp = order.createdAt || new Date().toISOString();
-        // Agrupa por mesa e minuto
         const key = `${order.tableNumber}_${Math.floor(new Date(timestamp).getTime() / 60000)}`;
 
         if (!grouped.has(key)) {
@@ -84,7 +84,6 @@ export default function KitchenPage() {
 
         const group = grouped.get(key)!;
 
-        // Adiciona item ao grupo
         if (order.productName) {
           group.items.push({
             id: order.id,
@@ -98,14 +97,11 @@ export default function KitchenPage() {
         }
 
         group.originalOrders.push(order);
-
-        // Recalcula total CORRETAMENTE
         group.total = group.items.reduce(
           (sum, item) => sum + item.productPrice * item.quantity,
           0,
         );
 
-        // Atualiza status do grupo baseado no status dos pedidos
         const statuses = group.originalOrders.map((o) => o.status);
         if (statuses.includes("ready")) {
           group.status = "ready";
@@ -117,8 +113,7 @@ export default function KitchenPage() {
       });
 
       return Array.from(grouped.values()).sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       );
     },
     [],
@@ -128,7 +123,6 @@ export default function KitchenPage() {
   const updateOrdersState = useCallback(
     (updatedOrders: Order[]) => {
       const groupedOrders = groupOrdersByTableAndTime(updatedOrders);
-
       setOrders({
         pending: groupedOrders.filter((o) => o.status === "pending"),
         preparing: groupedOrders.filter((o) => o.status === "preparing"),
@@ -142,14 +136,12 @@ export default function KitchenPage() {
   const handleOrderUpdate = useCallback(
     (updatedOrder: Order) => {
       setOrders((prev) => {
-        // Junta todos os pedidos
         const allOrders = [
           ...prev.pending.flatMap((g) => g.originalOrders),
           ...prev.preparing.flatMap((g) => g.originalOrders),
           ...prev.ready.flatMap((g) => g.originalOrders),
         ];
 
-        // Atualiza o pedido na lista
         const orderIndex = allOrders.findIndex((o) => o.id === updatedOrder.id);
         if (orderIndex !== -1) {
           allOrders[orderIndex] = updatedOrder;
@@ -157,9 +149,7 @@ export default function KitchenPage() {
           allOrders.push(updatedOrder);
         }
 
-        // Reagrupa todos os pedidos
         const groupedOrders = groupOrdersByTableAndTime(allOrders);
-
         return {
           pending: groupedOrders.filter((o) => o.status === "pending"),
           preparing: groupedOrders.filter((o) => o.status === "preparing"),
@@ -173,31 +163,30 @@ export default function KitchenPage() {
   // Busca pedidos pendentes
   const fetchPendingOrders = useCallback(async (): Promise<void> => {
     try {
-      console.log("🔍 Buscando pedidos em:", `${BACKEND_URL}/api/orders`);
-      const response = await fetch(`${BACKEND_URL}/api/orders`);
-
+      const cleanUrl = getCleanUrl();
+      const url = `${cleanUrl}/api/orders`;
+      
+      console.log("🔍 Buscando pedidos em:", url);
+      
+      const response = await fetch(url);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
+      
       const data: Order[] = await response.json();
       console.log("📦 Dados recebidos:", data.length, "pedidos");
-
       updateOrdersState(data);
     } catch (error) {
       console.error("❌ Error fetching orders:", error);
     }
-  }, [updateOrdersState]);
+  }, [getCleanUrl, updateOrdersState]);
 
   // Atualiza status do pedido
   const updateOrderStatus = useCallback(
     async (orderId: string | number, newStatus: string): Promise<void> => {
       try {
-        // 🔧 CORREÇÃO: Remove barra final da URL se existir
-        const cleanUrl = BACKEND_URL.replace(/\/$/, "");
+        const cleanUrl = getCleanUrl();
         const url = `${cleanUrl}/api/orders/${orderId}/status`;
 
-        console.log(
-          `📡 Atualizando pedido ${orderId} para status: ${newStatus}`,
-        );
+        console.log(`📡 Atualizando pedido ${orderId} para status: ${newStatus}`);
         console.log(`🔗 URL: ${url}`);
 
         const response = await fetch(url, {
@@ -208,68 +197,29 @@ export default function KitchenPage() {
 
         if (response.ok) {
           const updatedOrder: Order = await response.json();
-          console.log(
-            `✅ Pedido ${orderId} atualizado com sucesso!`,
-            updatedOrder,
-          );
+          console.log(`✅ Pedido ${orderId} atualizado com sucesso!`);
           handleOrderUpdate(updatedOrder);
 
-          // 🔧 CORREÇÃO: Tocar som apenas se o arquivo existir
           if (newStatus === "ready") {
             try {
               const audioReady = new Audio("/sounds/order-ready.mp3");
               audioReady.volume = 0.5;
-              const playPromise = audioReady.play();
-
-              if (playPromise !== undefined) {
-                playPromise.catch((e) => {
-                  console.warn("⚠️ Som não pôde ser reproduzido:", e.message);
-                  // Fallback: beep via Web Audio API
-                  try {
-                    const AudioContext =
-                      window.AudioContext || (window as any).webkitAudioContext;
-                    if (AudioContext) {
-                      const ctx = new AudioContext();
-                      const oscillator = ctx.createOscillator();
-                      const gain = ctx.createGain();
-                      oscillator.connect(gain);
-                      gain.connect(ctx.destination);
-                      oscillator.frequency.value = 880;
-                      gain.gain.value = 0.3;
-                      oscillator.start();
-                      gain.gain.exponentialRampToValueAtTime(
-                        0.00001,
-                        ctx.currentTime + 0.5,
-                      );
-                      setTimeout(() => ctx.close(), 600);
-                    }
-                  } catch (fallbackError) {
-                    console.log("Fallback de som também falhou");
-                  }
-                });
-              }
+              audioReady.play().catch((e) => console.warn("⚠️ Som não disponível:", e.message));
             } catch (audioError) {
-              console.log("Erro ao preparar áudio:", audioError);
+              console.log("Erro ao preparar áudio");
             }
           }
         } else {
-          const errorData = await response
-            .json()
-            .catch(() => ({ message: "Erro desconhecido" }));
+          const errorData = await response.json().catch(() => ({ message: "Erro desconhecido" }));
           console.error(`❌ Erro ${response.status}:`, errorData);
-          alert(
-            "Erro ao atualizar status: " +
-              (errorData.message || `Falha no servidor (${response.status})`),
-          );
+          alert("Erro ao atualizar status: " + (errorData.message || `Falha no servidor (${response.status})`));
         }
       } catch (error) {
         console.error("❌ Erro ao atualizar pedido:", error);
-        alert(
-          `Erro de conexão com o servidor. Verifique se o backend está rodando em: ${BACKEND_URL}`,
-        );
+        alert(`Erro de conexão com o servidor. Verifique se o backend está rodando em: ${BACKEND_URL}`);
       }
     },
-    [handleOrderUpdate, BACKEND_URL],
+    [handleOrderUpdate, getCleanUrl],
   );
 
   // Atualiza status de um grupo de pedidos
@@ -281,141 +231,45 @@ export default function KitchenPage() {
       }
 
       try {
-        console.log(`📦 Atualizando grupo da mesa ${group.tableNumber}`);
-        console.log(
-          `📋 Itens: ${group.items.map((i) => `${i.quantity}x ${i.productName}`).join(", ")}`,
-        );
-        console.log(`🔄 Status: ${newStatus}`);
-
-        // Timeout para a operação (opcional)
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(
-            () => reject(new Error("Timeout ao atualizar pedidos")),
-            10000,
-          ),
-        );
-
+        console.log(`📦 Atualizando grupo da mesa ${group.tableNumber} para status: ${newStatus}`);
+        
         const promises = group.originalOrders.map((order) =>
-          updateOrderStatus(order.id, newStatus),
+          updateOrderStatus(order.id, newStatus)
         );
-
-        const results = (await Promise.race([
-          Promise.allSettled(promises),
-          timeoutPromise,
-        ])) as PromiseSettledResult<any>[];
-
-        // Verifica se foi timeout
-        if (results === undefined) {
-          console.error(
-            `❌ Timeout ao atualizar pedidos da mesa ${group.tableNumber}`,
-          );
-          return;
-        }
-
-        const failed = results.filter((r) => r.status === "rejected");
-        const succeeded = results.filter((r) => r.status === "fulfilled");
-
-        if (failed.length === 0) {
-          console.log(
-            `✅ ${succeeded.length} pedidos da mesa ${group.tableNumber} atualizados`,
-          );
-        } else {
-          console.warn(
-            `⚠️ ${failed.length} de ${group.originalOrders.length} pedidos falharam`,
-          );
-        }
+        
+        await Promise.all(promises);
+        console.log(`✅ Grupo da mesa ${group.tableNumber} atualizado com sucesso`);
       } catch (error) {
-        console.error(
-          `❌ Erro ao atualizar grupo da mesa ${group.tableNumber}:`,
-          error,
-        );
+        console.error(`❌ Erro ao atualizar grupo da mesa ${group.tableNumber}:`, error);
       }
     },
     [updateOrderStatus],
   );
 
+  // Toca som de notificação
   const playNotificationSound = useCallback((): void => {
     try {
-      const audio = new Audio();
+      const audio = new Audio("/sounds/new-order.mp3");
       audio.volume = 0.5;
-
-      // Tenta carregar o arquivo de som
-      audio.src = "/sounds/new-order.mp3";
-
-      const playPromise = audio.play();
-
-      if (playPromise !== undefined) {
-        playPromise.catch((error) => {
-          console.warn(
-            "⚠️ Arquivo de som não encontrado, usando fallback:",
-            error.message,
-          );
-
-          // 🔧 FALLBACK: Web Audio API (beep)
-          try {
-            const AudioContext =
-              window.AudioContext || (window as any).webkitAudioContext;
-            if (AudioContext) {
-              const ctx = new AudioContext();
-              const oscillator = ctx.createOscillator();
-              const gain = ctx.createGain();
-
-              oscillator.connect(gain);
-              gain.connect(ctx.destination);
-
-              oscillator.frequency.value = 880; // Nota Lá
-              gain.gain.value = 0.3;
-
-              oscillator.start();
-
-              // Encerra o som após 0.3 segundos
-              gain.gain.exponentialRampToValueAtTime(
-                0.00001,
-                ctx.currentTime + 0.3,
-              );
-              setTimeout(() => {
-                ctx.close().catch(() => {});
-              }, 350);
-
-              console.log(
-                "🔔 Som de notificação reproduzido via Web Audio API",
-              );
-            } else {
-              // Último recurso: vibrar se disponível
-              if (navigator.vibrate) {
-                navigator.vibrate(200);
-                console.log("📳 Vibração como fallback");
-              }
-            }
-          } catch (fallbackError) {
-            console.warn("⚠️ Fallback de som também falhou:", fallbackError);
-            // Vibração como último recurso
-            if (navigator.vibrate) {
-              navigator.vibrate(200);
-            }
-          }
-        });
-      }
+      audio.play().catch((error) => {
+        console.warn("⚠️ Som não disponível:", error.message);
+        if (navigator.vibrate) navigator.vibrate(200);
+      });
     } catch (error) {
       console.error("❌ Erro ao criar áudio:", error);
-      // Vibração como último recurso
-      if (navigator.vibrate) {
-        navigator.vibrate(200);
-      }
+      if (navigator.vibrate) navigator.vibrate(200);
     }
   }, []);
 
   // Configura WebSocket
   useEffect(() => {
     const cleanUrl = getCleanUrl();
-
     if (!cleanUrl) {
       console.error("❌ URL do backend não definida!");
       return;
     }
 
     console.log("🔌 Conectando WebSocket em:", cleanUrl);
-    console.log("📡 BACKEND_URL original:", BACKEND_URL);
 
     const newSocket: Socket = io(cleanUrl, {
       query: { type: "kitchen" },
@@ -429,18 +283,15 @@ export default function KitchenPage() {
     setSocket(newSocket);
     fetchPendingOrders();
 
-    // Evento: conexão bem-sucedida
     newSocket.on("connect", () => {
       console.log("✅ WebSocket conectado com sucesso!");
     });
 
-    // Evento: pedido atualizado
     newSocket.on("order-updated", (updatedOrder: Order) => {
       console.log("🔄 Pedido atualizado via WebSocket:", updatedOrder);
       handleOrderUpdate(updatedOrder);
     });
 
-    // Evento: novo pedido
     newSocket.on("new-order", (order: Order) => {
       console.log("🆕 Novo pedido recebido:", order);
 
@@ -451,17 +302,13 @@ export default function KitchenPage() {
           ...prev.ready.flatMap((g) => g.originalOrders),
         ];
 
-        // Verifica se o pedido já existe
         const exists = allOrders.some((o) => o.id === order.id);
         if (!exists) {
           allOrders.push(order);
           console.log(`✅ Novo pedido ${order.id} adicionado`);
-        } else {
-          console.log(`ℹ️ Pedido ${order.id} já existe, ignorando duplicação`);
         }
 
         const groupedOrders = groupOrdersByTableAndTime(allOrders);
-
         return {
           pending: groupedOrders.filter((o) => o.status === "pending"),
           preparing: groupedOrders.filter((o) => o.status === "preparing"),
@@ -474,17 +321,10 @@ export default function KitchenPage() {
       }
     });
 
-    // Evento: erro de conexão
     newSocket.on("connect_error", (error) => {
       console.error("❌ Erro de conexão WebSocket:", error.message);
     });
 
-    // Evento: reconexão
-    newSocket.on("reconnect", (attemptNumber) => {
-      console.log(`🔄 WebSocket reconectado após ${attemptNumber} tentativas`);
-    });
-
-    // Evento: desconexão
     newSocket.on("disconnect", (reason) => {
       console.log(`❌ WebSocket desconectado. Motivo: ${reason}`);
     });
@@ -528,9 +368,7 @@ export default function KitchenPage() {
             <div className="bg-white rounded-xl shadow-md overflow-hidden">
               <div className="bg-orange-500 text-white px-6 py-4">
                 <h2 className="text-xl font-bold">📋 NOVOS PEDIDOS</h2>
-                <p className="text-sm opacity-90">
-                  {orders.pending.length} pedido(s)
-                </p>
+                <p className="text-sm opacity-90">{orders.pending.length} pedido(s)</p>
               </div>
               <div className="p-4 space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
                 {orders.pending.map((order) => (
@@ -543,9 +381,7 @@ export default function KitchenPage() {
                   />
                 ))}
                 {orders.pending.length === 0 && (
-                  <div className="text-center text-gray-500 py-8">
-                    Nenhum pedido novo
-                  </div>
+                  <div className="text-center text-gray-500 py-8">Nenhum pedido novo</div>
                 )}
               </div>
             </div>
@@ -556,9 +392,7 @@ export default function KitchenPage() {
             <div className="bg-white rounded-xl shadow-md overflow-hidden">
               <div className="bg-blue-500 text-white px-6 py-4">
                 <h2 className="text-xl font-bold">🔥 EM PREPARO</h2>
-                <p className="text-sm opacity-90">
-                  {orders.preparing.length} pedido(s)
-                </p>
+                <p className="text-sm opacity-90">{orders.preparing.length} pedido(s)</p>
               </div>
               <div className="p-4 space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
                 {orders.preparing.map((order) => (
@@ -571,9 +405,7 @@ export default function KitchenPage() {
                   />
                 ))}
                 {orders.preparing.length === 0 && (
-                  <div className="text-center text-gray-500 py-8">
-                    Nenhum pedido em preparo
-                  </div>
+                  <div className="text-center text-gray-500 py-8">Nenhum pedido em preparo</div>
                 )}
               </div>
             </div>
@@ -584,18 +416,14 @@ export default function KitchenPage() {
             <div className="bg-white rounded-xl shadow-md overflow-hidden">
               <div className="bg-green-500 text-white px-6 py-4">
                 <h2 className="text-xl font-bold">✨ PRONTOS</h2>
-                <p className="text-sm opacity-90">
-                  {orders.ready.length} pedido(s)
-                </p>
+                <p className="text-sm opacity-90">{orders.ready.length} pedido(s)</p>
               </div>
               <div className="p-4 space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
                 {orders.ready.map((order) => (
                   <OrderCard key={order.id} order={order} isReady={true} />
                 ))}
                 {orders.ready.length === 0 && (
-                  <div className="text-center text-gray-500 py-8">
-                    Nenhum pedido pronto
-                  </div>
+                  <div className="text-center text-gray-500 py-8">Nenhum pedido pronto</div>
                 )}
               </div>
             </div>
