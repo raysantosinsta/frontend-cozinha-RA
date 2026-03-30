@@ -8,7 +8,7 @@ import KitchenHeader from "../components/KitchenHeader";
 import NotificationSound from "../components/NotificationSound";
 import "./globals.css";
 
-const BACKEND_URL = "http://192.168.30.106:3000";
+const BACKEND_URL = "https://backend-nestjs-ra.onrender.com/";
 
 interface OrderItem {
   id: string | number;
