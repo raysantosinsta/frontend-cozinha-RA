@@ -265,7 +265,9 @@ export default function KitchenPage() {
     (orders: GroupedOrder[]) => {
       let filtered = [...orders];
       if (filterTable) {
-        filtered = filtered.filter((o) => o.tableNumber.toString() === filterTable);
+        filtered = filtered.filter(
+          (o) => o.tableNumber.toString() === filterTable,
+        );
       }
       if (filterTime === "urgent") {
         filtered = filtered.filter((o) => (o.elapsedTime || 0) > 300);
@@ -360,15 +362,21 @@ export default function KitchenPage() {
   ]);
 
   return (
-    <div className={`kitchen-app min-h-screen transition-all duration-300 ${isDarkMode ? 'bg-slate-900' : 'bg-slate-100'}`}>
+    <div
+      className={`kitchen-app min-h-screen transition-all duration-300 ${isDarkMode ? "bg-slate-900" : "bg-slate-100"}`}
+    >
       {/* Header Profissional */}
-      <header className={`sticky top-0 z-50 ${isDarkMode ? 'bg-slate-800' : 'bg-gradient-to-r from-orange-600 to-red-600'} text-white shadow-lg`}>
+      <header
+        className={`sticky top-0 z-50 ${isDarkMode ? "bg-slate-800" : "bg-gradient-to-r from-orange-600 to-red-600"} text-white shadow-lg`}
+      >
         <div className="container mx-auto px-6 py-4">
           <div className="flex justify-between items-center flex-wrap gap-4">
             <div className="flex items-center gap-4">
               <div className="text-4xl">🍳</div>
               <div>
-                <h1 className="text-2xl md:text-3xl font-bold">Cozinha Digital</h1>
+                <h1 className="text-2xl md:text-3xl font-bold">
+                  Cozinha Digital
+                </h1>
                 <p className="text-sm opacity-90">Pedidos em tempo real</p>
               </div>
             </div>
@@ -386,9 +394,11 @@ export default function KitchenPage() {
 
               {/* Status da conexão */}
               <div className="flex items-center gap-2 bg-white/20 rounded-full px-3 py-1">
-                <div className={`w-2 h-2 rounded-full ${socket?.connected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`}></div>
+                <div
+                  className={`w-2 h-2 rounded-full ${socket?.connected ? "bg-green-400 animate-pulse" : "bg-red-400"}`}
+                ></div>
                 <span className="text-sm font-medium">
-                  {socket?.connected ? 'Online' : 'Offline'}
+                  {socket?.connected ? "Online" : "Offline"}
                 </span>
               </div>
 
@@ -405,14 +415,16 @@ export default function KitchenPage() {
                   className="bg-white/20 hover:bg-white/30 rounded-full p-2 transition-all"
                   title="Tela cheia"
                 >
-                  <i className={`fas ${isFullscreen ? 'fa-compress' : 'fa-expand'}`}></i>
+                  <i
+                    className={`fas ${isFullscreen ? "fa-compress" : "fa-expand"}`}
+                  ></i>
                 </button>
                 <button
                   onClick={() => setIsDarkMode(!isDarkMode)}
                   className="bg-white/20 hover:bg-white/30 rounded-full p-2 transition-all"
                   title={isDarkMode ? "Modo claro" : "Modo escuro"}
                 >
-                  <i className={`fas ${isDarkMode ? 'fa-sun' : 'fa-moon'}`}></i>
+                  <i className={`fas ${isDarkMode ? "fa-sun" : "fa-moon"}`}></i>
                 </button>
                 <button
                   onClick={() => setSoundEnabled(!soundEnabled)}
@@ -425,27 +437,73 @@ export default function KitchenPage() {
           </div>
 
           {/* Barra de filtros */}
-          <div className="flex gap-4 mt-4 pt-4 border-t border-white/20">
-            <input
-              type="text"
-              placeholder="Filtrar por mesa..."
-              value={filterTable}
-              onChange={(e) => setFilterTable(e.target.value)}
-              className="bg-white/20 rounded-lg px-4 py-2 text-white placeholder-white/50 text-sm w-32"
-            />
-            <select
-              value={filterTime}
-              onChange={(e) => setFilterTime(e.target.value)}
-              className="bg-white/20 rounded-lg px-4 py-2 text-white text-sm"
-            >
-              <option value="all">Todos os pedidos</option>
-              <option value="urgent">⚠️ Urgentes (+5min)</option>
-            </select>
+          {/* Barra de filtros */}
+          <div className="flex gap-4 mt-4 pt-4 border-t border-white/20 flex-wrap">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Filtrar por mesa..."
+                value={filterTable}
+                onChange={(e) => setFilterTable(e.target.value)}
+                className={`rounded-lg px-4 py-2 text-sm w-32 focus:outline-none focus:ring-2 focus:ring-orange-500 ${
+                  isDarkMode
+                    ? "bg-slate-700 text-white placeholder-gray-400 border border-slate-600"
+                    : "bg-white text-gray-800 placeholder-gray-400 border border-gray-300"
+                }`}
+              />
+            </div>
+
+            <div className="relative">
+              <select
+                value={filterTime}
+                onChange={(e) => setFilterTime(e.target.value)}
+                className={`rounded-lg px-4 py-2 text-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-500 appearance-none pr-8 ${
+                  isDarkMode
+                    ? "bg-slate-700 text-white border border-slate-600"
+                    : "bg-white text-gray-800 border border-gray-300"
+                }`}
+                style={{
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='${isDarkMode ? "%23ffffff" : "%23333"}55'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`,
+                  backgroundRepeat: "no-repeat",
+                  backgroundPosition: "right 0.75rem center",
+                  backgroundSize: "1rem",
+                }}
+              >
+                <option
+                  value="all"
+                  className={
+                    isDarkMode
+                      ? "bg-slate-700 text-white"
+                      : "bg-white text-gray-800"
+                  }
+                >
+                  📋 Todos os pedidos
+                </option>
+                <option
+                  value="urgent"
+                  className={
+                    isDarkMode
+                      ? "bg-slate-700 text-white"
+                      : "bg-white text-gray-800"
+                  }
+                >
+                  ⚠️ Urgentes (+5min)
+                </option>
+              </select>
+            </div>
+
             <button
-              onClick={() => { setFilterTable(""); setFilterTime("all"); }}
-              className="bg-white/20 hover:bg-white/30 rounded-lg px-4 py-2 text-sm transition-all"
+              onClick={() => {
+                setFilterTable("");
+                setFilterTime("all");
+              }}
+              className={`rounded-lg px-4 py-2 text-sm transition-all ${
+                isDarkMode
+                  ? "bg-slate-700 hover:bg-slate-600 text-white border border-slate-600"
+                  : "bg-gray-200 hover:bg-gray-300 text-gray-700"
+              }`}
             >
-              Limpar filtros
+              <i className="fas fa-times mr-1"></i> Limpar filtros
             </button>
           </div>
         </div>
@@ -455,12 +513,16 @@ export default function KitchenPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Coluna Novos Pedidos */}
           <div className="order-column">
-            <div className={`rounded-xl shadow-lg overflow-hidden border-l-4 border-orange-500 ${isDarkMode ? 'bg-slate-800' : 'bg-white'}`}>
+            <div
+              className={`rounded-xl shadow-lg overflow-hidden border-l-4 border-orange-500 ${isDarkMode ? "bg-slate-800" : "bg-white"}`}
+            >
               <div className="bg-orange-500 text-white px-6 py-4">
                 <h2 className="text-xl font-bold flex items-center gap-2">
                   <i className="fas fa-bell"></i> NOVOS PEDIDOS
                 </h2>
-                <p className="text-sm opacity-90">{filterOrders(orders.pending).length} pedido(s)</p>
+                <p className="text-sm opacity-90">
+                  {filterOrders(orders.pending).length} pedido(s)
+                </p>
               </div>
               <div className="p-4 space-y-4 max-h-[calc(100vh-280px)] overflow-y-auto">
                 {filterOrders(orders.pending).map((order) => (
@@ -486,12 +548,16 @@ export default function KitchenPage() {
 
           {/* Coluna Em Preparo */}
           <div className="order-column">
-            <div className={`rounded-xl shadow-lg overflow-hidden border-l-4 border-blue-500 ${isDarkMode ? 'bg-slate-800' : 'bg-white'}`}>
+            <div
+              className={`rounded-xl shadow-lg overflow-hidden border-l-4 border-blue-500 ${isDarkMode ? "bg-slate-800" : "bg-white"}`}
+            >
               <div className="bg-blue-500 text-white px-6 py-4">
                 <h2 className="text-xl font-bold flex items-center gap-2">
                   <i className="fas fa-fire"></i> EM PREPARO
                 </h2>
-                <p className="text-sm opacity-90">{filterOrders(orders.preparing).length} pedido(s)</p>
+                <p className="text-sm opacity-90">
+                  {filterOrders(orders.preparing).length} pedido(s)
+                </p>
               </div>
               <div className="p-4 space-y-4 max-h-[calc(100vh-280px)] overflow-y-auto">
                 {filterOrders(orders.preparing).map((order) => (
@@ -517,12 +583,16 @@ export default function KitchenPage() {
 
           {/* Coluna Prontos */}
           <div className="order-column">
-            <div className={`rounded-xl shadow-lg overflow-hidden border-l-4 border-green-500 ${isDarkMode ? 'bg-slate-800' : 'bg-white'}`}>
+            <div
+              className={`rounded-xl shadow-lg overflow-hidden border-l-4 border-green-500 ${isDarkMode ? "bg-slate-800" : "bg-white"}`}
+            >
               <div className="bg-green-500 text-white px-6 py-4">
                 <h2 className="text-xl font-bold flex items-center gap-2">
                   <i className="fas fa-check-circle"></i> PRONTOS
                 </h2>
-                <p className="text-sm opacity-90">{filterOrders(orders.ready).length} pedido(s)</p>
+                <p className="text-sm opacity-90">
+                  {filterOrders(orders.ready).length} pedido(s)
+                </p>
               </div>
               <div className="p-4 space-y-4 max-h-[calc(100vh-280px)] overflow-y-auto">
                 {filterOrders(orders.ready).map((order) => (
